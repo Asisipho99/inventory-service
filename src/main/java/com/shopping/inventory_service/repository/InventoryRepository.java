@@ -1,0 +1,16 @@
+package com.shopping.inventory_service.repository;
+
+import com.shopping.inventory_service.entity.Inventory;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+import java.util.Optional;
+
+public interface InventoryRepository extends JpaRepository<Inventory, Long> {
+
+    Optional<Inventory> findByProductId(Long productId);
+
+    boolean existsByProductId(Long productId);
+
+    // Find all products with stock below their alert threshold
+    List<Inventory> findByQuantityLessThanEqual(Integer threshold);
+}
