@@ -75,7 +75,11 @@ public class InventoryService {
     // Deduct stock when an order is placed
     @Transactional
     public StockResponse deductStock(StockDeductRequest request) {
-        Inventory inventory = inventoryRepository.findByProductId(request.getProductId())
+        // Use pessimistic write lock to prevent race conditions —
+        // two concurrent orders for the last item will queue here
+        // instead of both succeeding
+        Inventory inventory = inventoryRepository
+                .findByProductIdForUpdate(request.getProductId())
                 .orElseThrow(() -> new RuntimeException(
                         "No inventory record found for product: " + request.getProductId()));
 
@@ -106,7 +110,9 @@ public class InventoryService {
     // Restore stock when an order is cancelled
     @Transactional
     public StockResponse restoreStock(StockDeductRequest request) {
-        Inventory inventory = inventoryRepository.findByProductId(request.getProductId())
+        // Use pessimistic write lock to prevent concurrent restore conflicts
+        Inventory inventory = inventoryRepository
+                .findByProductIdForUpdate(request.getProductId())
                 .orElseThrow(() -> new RuntimeException(
                         "No inventory record found for product: " + request.getProductId()));
 
