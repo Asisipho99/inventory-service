@@ -3,6 +3,7 @@ package com.shopping.inventory_service.service;
 import com.shopping.inventory_service.dto.*;
 import com.shopping.inventory_service.entity.Inventory;
 import com.shopping.inventory_service.repository.InventoryRepository;
+import com.shopping.inventory_service.service.LowStockNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +14,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InventoryService {
 
-    private final InventoryRepository inventoryRepository;
+    private final InventoryRepository          inventoryRepository;
+    private final LowStockNotificationService  notificationService;
 
     // Create a stock record for a new product
     public Inventory createStock(InventoryRequest request) {
@@ -90,11 +92,20 @@ public class InventoryService {
                             + ", Requested: " + request.getQuantity());
         }
 
+        boolean wasAboveThreshold = inventory.getQuantity() > inventory.getLowStockAlert();
         inventory.setQuantity(inventory.getQuantity() - request.getQuantity());
         inventoryRepository.save(inventory);
 
-        boolean lowStock = inventory.getQuantity() <= inventory.getLowStockAlert();
-        String message = lowStock
+        boolean isNowLowStock = inventory.getQuantity() <= inventory.getLowStockAlert();
+
+        // Only send alert when stock crosses the threshold for the first time
+        // (was above, now at or below) — avoids spamming on every order
+        if (wasAboveThreshold && isNowLowStock) {
+            notificationService.sendLowStockAlert(inventory,
+                    "Product #" + inventory.getProductId());
+        }
+
+        String message = isNowLowStock
                 ? "⚠️ Stock deducted. Low stock alert — only "
                 + inventory.getQuantity() + " units remaining"
                 : "Stock deducted successfully. Remaining: " + inventory.getQuantity();
@@ -102,7 +113,7 @@ public class InventoryService {
         return new StockResponse(
                 inventory.getProductId(),
                 inventory.getQuantity(),
-                lowStock,
+                isNowLowStock,
                 message
         );
     }
